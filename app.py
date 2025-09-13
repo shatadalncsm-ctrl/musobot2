@@ -2,9 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from google import genai
 import json
 import os
-import speech_recognition as sr
-import threading
-from googletrans import Translator
+#from google_trans_new import google_translator
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -14,10 +12,12 @@ app.secret_key = 'your-secret-key-here'
 client = genai.Client(api_key="AIzaSyC8Jpsr36NM-YEQjLR9sIg3-EYaCskLQJs")
 
 # Initialize translator
+#translator = google_translator()
+
+from googletrans import Translator
+
+# Initialize translator
 translator = Translator()
-
-# --- INCLUDE YOUR MUSEUM DATA HERE ---
-
 
 # Museum data configuration
 MUSEUM_DATA ={
@@ -1113,12 +1113,6 @@ STANDARD_QUESTIONS = {
     ]
 }
 
-
-
-
-
-# --------------------------------------------
-
 def ask_gemini(prompt: str, model="gemini-2.0-flash"):
     """Send prompt to Gemini and get response."""
     try:
@@ -1276,52 +1270,6 @@ def museum_info():
             info[key] = value
     
     return jsonify(info)
-
-# --- VOICE INPUT FUNCTIONALITY --- :cite[1]:cite[6]:cite[8]
-@app.route('/start_recording', methods=['POST'])
-def start_recording():
-    """Start voice recording and convert speech to text"""
-    try:
-        recognizer = sr.Recognizer()
-        with sr.Microphone() as source:
-            recognizer.adjust_for_ambient_noise(source)
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-        
-        text = recognizer.recognize_google(audio)
-        return jsonify({'success': True, 'text': text})
-        
-    except sr.UnknownValueError:
-        return jsonify({'success': False, 'error': 'Could not understand audio'})
-    except sr.RequestError as e:
-        return jsonify({'success': False, 'error': f'Speech recognition error: {e}'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/process_voice_question', methods=['POST'])
-def process_voice_question():
-    """Process voice question and return answer"""
-    data = request.json
-    question = data.get('question', '')
-    lang = data.get('lang', 'en')
-    
-    if not question:
-        return jsonify({'error': 'No question provided'})
-    
-    answer = get_museum_answer(question, lang)
-    return jsonify({'answer': answer})
-
-@app.route('/process_voice_trip', methods=['POST'])
-def process_voice_trip():
-    """Process voice inputs for trip planning"""
-    data = request.json
-    interests = data.get('interests', '')
-    time_available = data.get('time_available', '')
-    with_kids = data.get('with_kids', '')
-    lang = data.get('lang', 'en')
-    
-    plan = plan_personalized_trip(interests, time_available, with_kids, lang)
-    return jsonify({'plan': plan})
-# -----------------------------------
 
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
@@ -1481,25 +1429,44 @@ if __name__ == '__main__':
             border-radius: 10px;
             color: white;
         }
-        .voice-btn {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 10px 10px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
             border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
+            outline: none;
             cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            margin-left: 10px;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 16px;
+            width: 33.33%;
         }
-        .voice-btn:hover {
-            background: linear-gradient(135deg, #218838 0%, #1e9e8a 100%);
-            transform: translateY(-2px);
+        .tab button:hover {
+            background-color: #ddd;
         }
-        .voice-status {
-            font-size: 14px;
-            color: #666;
-            margin-left: 10px;
+        .tab button.active {
+            background-color: #4682B4;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            animation: fadeEffect 1s;
+        }
+        @keyframes fadeEffect {
+            from {opacity: 0;}
+            to {opacity: 1;}
+        }
+        .active-tab {
+            display: block;
         }
     </style>
 </head>
@@ -1523,15 +1490,6 @@ if __name__ == '__main__':
                 <h2>❓ {{ translations.ask_question }}</h2>
                 <input type="text" id="questionInput" placeholder="{{ translations.question_placeholder }}">
                 <button onclick="askQuestion()">{{ translations.ask_button }}</button>
-                
-                <!-- Voice input button for questions -->
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                    <button id="voiceBtn-question" onclick="toggleVoiceRecording('question')" class="voice-btn">
-                        🎤 Voice Input
-                    </button>
-                    <span id="voiceStatus-question" class="voice-status"></span>
-                </div>
-                
                 <div class="result">
                     <h3>{{ translations.answer }}</h3>
                     <div id="answerResult"></div>
@@ -1544,15 +1502,6 @@ if __name__ == '__main__':
                 <input type="text" id="timeInput" placeholder="{{ translations.time_available }}">
                 <input type="text" id="kidsInput" placeholder="{{ translations.with_kids }}">
                 <button onclick="planTrip()">{{ translations.generate_plan }}</button>
-                
-                <!-- Voice input button for trip planning -->
-                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                    <button id="voiceBtn-trip" onclick="toggleVoiceRecording('trip')" class="voice-btn">
-                        🎤 Voice Input
-                    </button>
-                    <span id="voiceStatus-trip" class="voice-status"></span>
-                </div>
-                
                 <div class="result">
                     <h3>{{ translations.your_plan }}</h3>
                     <div id="planResult"></div>
@@ -1582,7 +1531,6 @@ if __name__ == '__main__':
 
     <script>
         let currentLang = '{{ current_lang }}';
-        let isRecording = false;
         
         function changeLanguage() {
             const lang = document.getElementById('languageSelect').value;
@@ -1701,123 +1649,6 @@ if __name__ == '__main__':
             .catch(error => {
                 document.getElementById('museumInfo').innerText = 'Error loading museum information: ' + error;
             });
-        }
-        
-        // Voice recording functionality
-        function toggleVoiceRecording(context) {
-            if (isRecording) {
-                stopRecording();
-                return;
-            }
-            
-            startRecording(context);
-        }
-        
-        function startRecording(context) {
-            isRecording = true;
-            const button = document.getElementById(`voiceBtn-${context}`);
-            button.innerHTML = '⏹️ Stop Recording';
-            button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-            
-            // Show recording status
-            const statusElement = document.getElementById(`voiceStatus-${context}`);
-            if (statusElement) {
-                statusElement.innerHTML = '🎤 Recording... Speak now!';
-            }
-            
-            fetch('/start_recording', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    processVoiceInput(data.text, context);
-                } else {
-                    alert('Voice recognition error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Voice recognition failed');
-            })
-            .finally(() => {
-                stopRecordingUI(context);
-            });
-        }
-        
-        function stopRecording() {
-            isRecording = false;
-            // The recording is handled server-side with timeout
-        }
-        
-        function stopRecordingUI(context) {
-            isRecording = false;
-            const button = document.getElementById(`voiceBtn-${context}`);
-            button.innerHTML = '🎤 Voice Input';
-            button.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-            
-            const statusElement = document.getElementById(`voiceStatus-${context}`);
-            if (statusElement) {
-                statusElement.innerHTML = '';
-            }
-        }
-        
-        function processVoiceInput(text, context) {
-            if (context === 'question') {
-                document.getElementById('questionInput').value = text;
-                askQuestion();
-            } else if (context === 'trip') {
-                // For trip planning, we need to parse the voice input
-                parseTripInput(text);
-            }
-        }
-        
-        function parseTripInput(text) {
-            // Simple parsing logic - you might want to enhance this
-            const lowerText = text.toLowerCase();
-            
-            // Extract interests
-            let interests = '';
-            if (lowerText.includes('history') || lowerText.includes('historical')) {
-                interests = 'history';
-            } else if (lowerText.includes('art') || lowerText.includes('sculpture')) {
-                interests = 'art';
-            } else if (lowerText.includes('science') || lowerText.includes('technology')) {
-                interests = 'science';
-            } else if (lowerText.includes('culture') || lowerText.includes('cultural')) {
-                interests = 'culture';
-            }
-            
-            // Extract time
-            let timeAvailable = '1 hour';
-            if (lowerText.includes('hour')) {
-                const hourMatch = text.match(/(\d+)\s*hour/);
-                if (hourMatch) {
-                    timeAvailable = `${hourMatch[1]} hour${hourMatch[1] > 1 ? 's' : ''}`;
-                }
-            } else if (lowerText.includes('half day') || lowerText.includes('half-day')) {
-                timeAvailable = 'half day';
-            } else if (lowerText.includes('full day') || lowerText.includes('full-day')) {
-                timeAvailable = 'full day';
-            }
-            
-            // Extract kids information
-            let withKids = 'no';
-            if (lowerText.includes('kids') || lowerText.includes('children') || 
-                lowerText.includes('child') || lowerText.includes('family')) {
-                withKids = 'yes';
-            }
-            
-            // Fill the form
-            document.getElementById('interestsInput').value = interests;
-            document.getElementById('timeInput').value = timeAvailable;
-            document.getElementById('kidsInput').value = withKids;
-            
-            // Auto-generate plan
-            setTimeout(() => planTrip(), 500);
         }
         
         // Load museum info when page loads
